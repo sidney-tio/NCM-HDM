@@ -97,13 +97,13 @@ def main(cfg: DictConfig) -> None:
 
     # Configure P-LoRA
     plora_config = PLoraConfig(
-        r=cfg.model.plora.r,
-        lora_alpha=cfg.model.plora.lora_alpha,
-        lora_dropout=cfg.model.plora.lora_dropout,
-        target_modules=cfg.model.plora.target_modules,
-        bias=cfg.model.plora.bias,
+        r=cfg.r,
+        lora_alpha=cfg.lora_alpha,
+        lora_dropout=cfg.lora_dropout,
+        target_modules=cfg.target_modules,
+        bias=cfg.bias,
         num_virtual_users=dm.n_users,
-        user_token_dim=cfg.model.plora.user_token_dim,
+        user_token_dim=cfg.user_token_dim,
     )
 
     plora_model = PLoraModel(

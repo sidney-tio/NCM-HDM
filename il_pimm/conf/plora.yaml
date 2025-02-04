@@ -2,6 +2,6 @@
 r: 8
 lora_alpha: 32
 lora_dropout: 0.1
-target_modules: ["toquery", "tovalue"]
+target_modules: ["toqueries", "tovalues"]
 bias: "none"
 user_token_dim: 768
