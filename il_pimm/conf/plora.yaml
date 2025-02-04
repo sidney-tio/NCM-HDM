@@ -1,7 +1,7 @@
 # conf/model/plora.yaml
-r: 8
-lora_alpha: 32
+r: 64
+lora_alpha: 128
 lora_dropout: 0.1
 target_modules: ["toqueries", "tovalues"]
 bias: "none"
-user_token_dim: 768
+user_token_dim: 512

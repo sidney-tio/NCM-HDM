@@ -2,6 +2,7 @@ import os
 import hydra
 import torch
 import lightning as L
+import wandb
 from omegaconf import DictConfig
 from lightning.pytorch import loggers
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -83,7 +84,7 @@ def main(cfg: DictConfig) -> None:
     # Test base model
     dm.setup("test")
     base_results = trainer.test(ckpt_path="best", datamodule=dm)
-
+    wandb.finish()
     # Phase 2: P-LoRA fine-tuning
     print("Starting Phase 2: P-LoRA Fine-tuning")
 
