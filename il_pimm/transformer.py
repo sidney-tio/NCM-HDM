@@ -272,7 +272,7 @@ class Classifier(L.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
-        _, __, y = batch
+        _, __, y, _ = batch
         loss, acc, preds = self._forward_step(batch, batch_idx)
 
         # log

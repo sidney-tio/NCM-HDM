@@ -72,6 +72,7 @@ def main(cfg: DictConfig) -> None:
 
     trainer = L.Trainer(
         max_epochs=cfg.trainer.max_epochs,
+        check_val_every_n_epoch=2,
         logger=logger,
         callbacks=[checkpoint_callback],
         devices=cfg.trainer.devices,
@@ -123,6 +124,7 @@ def main(cfg: DictConfig) -> None:
 
     trainer = L.Trainer(
         max_epochs=cfg.trainer.max_epochs,
+        check_val_every_n_epoch=2,,
         logger=logger,
         callbacks=[checkpoint_callback],
         devices=cfg.trainer.devices,
