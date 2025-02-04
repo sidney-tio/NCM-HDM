@@ -94,6 +94,7 @@ class PhishingDataModule(L.LightningDataModule):
     def setup(self, stage: str):
         if stage == "fit":
             train_val = PhishingDataset(self.data_dir, train=True)
+            self.n_users = train_val.n_users
             self.train, self.val = random_split(
                 train_val,
                 [
