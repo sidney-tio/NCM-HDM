@@ -88,7 +88,7 @@ def main(cfg: DictConfig) -> None:
     print("Starting Phase 2: P-LoRA Fine-tuning")
 
     # Load the best base model
-    best_base_model = model.load_from_checkpoint(
+    best_base_model = Classifier.load_from_checkpoint(
         checkpoint_callback.best_model_path,
         model=base_model,
         lr=cfg.trainer.lr,
@@ -124,7 +124,7 @@ def main(cfg: DictConfig) -> None:
 
     trainer = L.Trainer(
         max_epochs=cfg.trainer.max_epochs,
-        check_val_every_n_epoch=2,,
+        check_val_every_n_epoch=2,
         logger=logger,
         callbacks=[checkpoint_callback],
         devices=cfg.trainer.devices,
