@@ -3,7 +3,7 @@ numpy==1.26.3
 lightning==2.2
 transformers==4.29.2
 peft==0.3.0
-pandas==1.4.2
+pandas==1.5.2
 accelerate==0.19
 tqdm
 scikit-learn
