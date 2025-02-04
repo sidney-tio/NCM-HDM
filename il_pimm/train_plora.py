@@ -91,8 +91,7 @@ def main(cfg: DictConfig) -> None:
     best_base_model = Classifier.load_from_checkpoint(
         checkpoint_callback.best_model_path,
         model=base_model,
-        lr=cfg.trainer.lr,
-        plora_training=False
+        lr=cfg.trainer.lr
     )
 
     # Configure P-LoRA
@@ -116,7 +115,7 @@ def main(cfg: DictConfig) -> None:
     plora_classifier = Classifier(
         plora_model,
         lr=cfg.trainer.lr,
-        plora_training=True
+        plora_train=True
     )
 
     # New trainer for P-LoRA phase
