@@ -1,0 +1,17 @@
+# conf/config.yaml
+defaults:
+  - model: transformer
+  - plora
+  - data
+  - _self_
+
+seed: 42
+wandb_logger: true
+run_notes: ""
+root_dir: "./results/phishing_encoding"
+trainer:
+  batch_size: 64
+  lr: 5e-6
+  max_epochs: 1000
+  save_top_k: 2
+  devices: "auto"

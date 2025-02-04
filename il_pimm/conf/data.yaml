@@ -1,0 +1,2 @@
+# conf/data.yaml
+data_dir: "./dataset/phishing/phishing-Emd"

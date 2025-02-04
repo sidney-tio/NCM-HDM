@@ -1,14 +1,25 @@
 import math
 import os
+from typing import List, Optional, Tuple, Union
 
 import lightning as L
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn import Parameter, init
 from torchmetrics.functional import accuracy
+from torch import Tensor
 
 from utils import d
+
+class Linear(nn.Linear):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 device=None, dtype=None) -> None:
+        super(Linear, self).__init__(in_features, out_features, bias, device=device, dtype=dtype)
+
+    def forward(self, input: Tensor, p: Optional[torch.Tensor] = None) -> Tensor:
+        return F.linear(input, self.weight, self.bias)
 
 
 class SelfAttention(nn.Module):
@@ -24,12 +35,12 @@ class SelfAttention(nn.Module):
         self.emb_size = emb_size
         self.heads = heads
 
-        self.tokeys = nn.Linear(emb_size, emb_size * heads, bias=False)
-        self.toqueries = nn.Linear(emb_size, emb_size * heads, bias=False)
-        self.tovalues = nn.Linear(emb_size, emb_size * heads, bias=False)
+        self.tokeys = Linear(emb_size, emb_size * heads, bias=False)
+        self.toqueries = Linear(emb_size, emb_size * heads, bias=False)
+        self.tovalues = Linear(emb_size, emb_size * heads, bias=False)
         self.output_layer = nn.Linear(emb_size * heads, emb_size)
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor = None) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mask: torch.Tensor = None, p: Optional[torch.Tensor] = None) -> torch.Tensor:
         """
         :param x: Vectors that will be used as keys, values, queries.
                   [batch_size x seq_len x embedding_size]
@@ -46,9 +57,9 @@ class SelfAttention(nn.Module):
             e == self.emb_size
         ), f"Input embedding dim ({e}) should match layer embedding dim ({self.emb_size})"
 
-        keys = self.tokeys(x).view(b, t, h, e).transpose(1, 2)
-        queries = self.toqueries(x).view(b, t, h, e).transpose(1, 2)
-        values = self.tovalues(x).view(b, t, h, e).transpose(1, 2)
+        keys = self.tokeys(x,p).view(b, t, h, e).transpose(1, 2)
+        queries = self.toqueries(x,p).view(b, t, h, e).transpose(1, 2)
+        values = self.tovalues(x,p).view(b, t, h, e).transpose(1, 2)
 
         # compute scaled dot-product self-attention
         queries = queries / math.sqrt(e)
@@ -107,7 +118,7 @@ class TransformerBlock(nn.Module):
         )
         self.do = nn.Dropout(dropout)
 
-    def forward(self, x, mask=None):
+    def forward(self, x, mask=None, p=None):
         """
         Encodes a sequence by passing it through 4 blocks:
             Self Attention -> Layer Norm -> Feed Forward -> Layer Norm
@@ -118,7 +129,7 @@ class TransformerBlock(nn.Module):
                   of the key, value vectors. [batch_size x 1 x key_len]
         """
         # Self Attention Block
-        attended = self.attention(x, mask)
+        attended = self.attention(x, mask, p)
 
         # Normalization Block
         x = self.norm1(attended + x)
@@ -178,7 +189,7 @@ class CTransformer(nn.Module):
         self.do = nn.Dropout(dropout)
         self.num_classes = num_classes
 
-    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, mask: torch.Tensor, p: torch.Tensor) -> torch.Tensor:
         """
         Function that encodes the source sequence.
         :param x: Our vectorized source sequence embedding. [Batch_size x seq_len x emb_size]
@@ -199,7 +210,7 @@ class CTransformer(nn.Module):
         x = self.do(x)
 
         for tblock in self.tblocks:
-            x = tblock(x, mask)
+            x = tblock(x, mask, p)
 
         mask = mask.squeeze(1).float()
         expanded_mask = torch.repeat_interleave(mask, e, 1).view(b, t, e)
@@ -224,7 +235,7 @@ class CTextTransformer(CTransformer):
         max_pool: bool = True,
         dropout: float = 0.0,
     ) -> None:
-        
+
         super().__init__(
             num_classes, emb_size, heads, depth, seq_length, max_pool, dropout
         )
@@ -236,12 +247,13 @@ class CTextTransformer(CTransformer):
 
 
 class Classifier(L.LightningModule):
-    def __init__(self, model: nn.Module, lr: float = 0.001) -> None:
+    def __init__(self, model: nn.Module, lr: float = 0.001, plora_train: bool = False) -> None:
         super().__init__()
         self.model = model
         self.lr = lr
         self.num_classes = model.num_classes
         self.test_step_outputs = []
+        self.plora_train = plora_train
 
     def training_step(self, batch, batch_idx):
         loss, acc, _ = self._forward_step(batch, batch_idx)
@@ -271,8 +283,12 @@ class Classifier(L.LightningModule):
         return loss
 
     def _forward_step(self, batch, batch_idx):
-        x, mask, y = batch
-        y_hat = self.model(x, mask)
+        x, mask, y, user_id = batch
+        p = None
+        if self.plora_train:
+            p = self.model.lora_embedding(user_id)
+
+        y_hat = self.model(x, mask, p)
         loss = F.nll_loss(y_hat, y)
         preds = torch.argmax(y_hat, dim=-1)
 
