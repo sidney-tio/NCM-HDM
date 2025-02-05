@@ -9,8 +9,14 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch import seed_everything
 from plora import PLoraConfig, PLoraModel
 
-from data_utils import PhishingDataModule
+from data_utils import PhishingDataModule, IDGDataModule
 from transformer import Classifier, CTransformer
+
+dataset_modules = {
+    "phishing": PhishingDataModule,
+    "iag": IDGDataModule
+}
+
 
 @hydra.main(version_base=None, config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
@@ -20,7 +26,7 @@ def main(cfg: DictConfig) -> None:
     exp_dir = os.getcwd()
 
     # Load the data
-    dm = PhishingDataModule(
+    dm = dataset_modules[cfg.dataset](
         batch_size=cfg.trainer.batch_size,
         data_dir=cfg.data_dir
     )

@@ -58,22 +58,29 @@ class IDGDataset(Dataset):
         self.data_dir = data_dir
         self.train = train
         raw_data = pd.read_json(data_path)
-        self.data = raw_data[["mturk_id","row_idx", "memory_idx", "Action"]].rename(
-            columns={"Action": "label",
-                     "mturk_id":"id"}
-        )
+        self.data, self.n_users = self._format_data(raw_data)
         self.content_emd = pd.read_pickle(content_emd_path)
         self.memory_emd = pd.read_pickle(memory_emd_path)
+
 
     def __len__(self):
         return len(self.data)
 
+    def _format_data(self, df):
+        df = df[["mturk_id", "row_idx", "memory_idx", "user_action1"]]
+        user_ids = pd.Categorical(df["mturk_id"])
+        df["user_id"] = user_ids.codes
+        n_users = len(user_ids.categories)
+        df = df.rename(columns={"user_action1": "label"})
+        return df[["user_id","row_idx", "memory_idx", "label"]], n_users
+
+
     def __getitem__(self, idx):
-        row_idx, memory_indices, label = self.data.iloc[idx]
+        user_id, row_idx, memory_indices, label = self.data.iloc[idx]
         input_data = [self.memory_emd[idx] for idx in memory_indices] + [
             self.content_emd[row_idx]
         ]
-        return np.array(input_data), label
+        return np.array(input_data), label, user_id
 
 
 class PhishingDataModule(L.LightningDataModule):
@@ -163,6 +170,7 @@ class IDGDataModule(L.LightningDataModule):
     def setup(self, stage: str):
         if stage == "fit":
             train_val = IDGDataset(self.data_dir, train=True)
+            self.n_users = train_val.n_users
             self.train, self.val = random_split(
                 train_val,
                 [
