@@ -67,11 +67,11 @@ class IDGDataset(Dataset):
         return len(self.data)
 
     def _format_data(self, df):
-        df = df[["mturk_id", "row_idx", "memory_idx", "user_action1"]]
-        user_ids = pd.Categorical(df["mturk_id"])
+        df = df[["MturkID", "row_idx", "memory_idx", "Action"]]
+        user_ids = pd.Categorical(df["MturkID"])
         df["user_id"] = user_ids.codes
         n_users = len(user_ids.categories)
-        df = df.rename(columns={"user_action1": "label"})
+        df = df.rename(columns={"Action": "label"})
         return df[["user_id","row_idx", "memory_idx", "label"]], n_users
 
 
