@@ -14,7 +14,7 @@ from transformer import Classifier, CTransformer
 
 dataset_modules = {
     "phishing": PhishingDataModule,
-    "iag": IDGDataModule
+    "idg": IDGDataModule
 }
 
 
@@ -84,7 +84,7 @@ def main(cfg: DictConfig) -> None:
         callbacks=[checkpoint_callback],
         devices=cfg.trainer.devices,
     )
-
+    model = torch.compile(model)
     trainer.fit(model, datamodule=dm)
 
     # Test base model
@@ -135,7 +135,7 @@ def main(cfg: DictConfig) -> None:
         callbacks=[checkpoint_callback],
         devices=cfg.trainer.devices,
     )
-
+    plora_classifier = torch.compile(plora_classifier)
     trainer.fit(plora_classifier, datamodule=dm)
 
     # Test P-LoRA model

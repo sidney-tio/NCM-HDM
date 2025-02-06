@@ -135,6 +135,8 @@ class PhishingDataModule(L.LightningDataModule):
             self.val,
             collate_fn=collate_fn,
             num_workers=8,
+            batch_size=self.batch_size,
+            drop_last= True
         )
 
     def test_dataloader(self):
@@ -142,6 +144,8 @@ class PhishingDataModule(L.LightningDataModule):
             self.test,
             collate_fn=collate_fn,
             num_workers=8,
+            batch_size=self.batch_size,
+            drop_last=True,
         )
 
     def predict_dataloader(self):
