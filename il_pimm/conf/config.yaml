@@ -9,6 +9,7 @@ seed: 42
 wandb_logger: true
 run_notes: ""
 root_dir: "./results/phishing_encoding"
+model_checkpoint: ""
 trainer:
   batch_size: 64
   lr: 5e-6

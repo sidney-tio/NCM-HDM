@@ -10,11 +10,11 @@ from lightning.pytorch import seed_everything
 from plora import PLoraConfig, PLoraModel
 
 from data_utils import PhishingDataModule, IDGDataModule
-from transformer import Classifier, CTransformer
+from transformer import Classifier, ShallowTransformer
 
-dataset_modules = {
-    "phishing": PhishingDataModule,
-    "idg": IDGDataModule
+dataset_info = {
+    "phishing": (PhishingDataModule,"./dataset/phishing/phishing-Emd"),
+    "idg": (IDGDataModule, "./dataset/IDG/IDG-Emd")
 }
 
 
@@ -23,12 +23,13 @@ def main(cfg: DictConfig) -> None:
     # Set up
     seed_everything(cfg.seed)
     torch.set_float32_matmul_precision("high")
-    exp_dir = os.getcwd()
+    exp_dir = "~/scratch/ilpimm"
 
     # Load the data
-    dm = dataset_modules[cfg.dataset](
+    data_module, data_dir = dataset_info[cfg.dataset]
+    dm = data_module(
         batch_size=cfg.trainer.batch_size,
-        data_dir=cfg.data_dir
+        data_dir=data_dir
     )
     dm.setup("fit")
 
@@ -56,50 +57,55 @@ def main(cfg: DictConfig) -> None:
         return checkpoint_callback, logger
 
     # Phase 1: Base model training
-    print("Starting Phase 1: Base Model Training")
-    base_model = CTransformer(
-        num_classes=dm.num_classes,
-        emb_size=dm.emb_size,
-        heads=cfg.model.n_heads,
-        depth=cfg.model.n_layers,
-        seq_length=cfg.model.seq_length,
-        max_pool=cfg.model.max_pool,
-        dropout=cfg.model.dropout,
-    )
-
-    base_model.config = {k: v if not isinstance(v, DictConfig) else dict(v) for k, v in dict(cfg.model).items()}
-
-    model = Classifier(
-        base_model,
-        lr=cfg.trainer.lr,
-        plora_train=False
-    )
-
-    checkpoint_callback, logger = get_callbacks_and_logger("base")
-
-    trainer = L.Trainer(
-        max_epochs=cfg.trainer.max_epochs,
-        check_val_every_n_epoch=2,
-        logger=logger,
-        callbacks=[checkpoint_callback],
-        devices=cfg.trainer.devices,
-    )
-    model = torch.compile(model)
-    trainer.fit(model, datamodule=dm)
-
-    # Test base model
-    dm.setup("test")
-    base_results = trainer.test(ckpt_path="best", datamodule=dm)
-    wandb.finish()
+    if cfg.model_checkpoint:
+        print("Loading pretrained base model from checkpoint")
+        base_model = ShallowTransformer(
+            num_classes=dm.num_classes,
+            emb_size=dm.emb_size,
+            seq_length=cfg.model.seq_length,
+            dropout=cfg.model.dropout,
+        )
+        base_model.config = {k: v if not isinstance(v, DictConfig) else dict(v) for k, v in dict(cfg.model).items()}
+        best_base_model = Classifier.load_from_checkpoint(
+            cfg.model_checkpoint,
+            model=base_model,
+            lr=cfg.trainer.lr
+        )
+        checkpoint_callback = None
+    else:
+        print("Starting Phase 1: Base Model Training")
+        base_model = ShallowTransformer(
+            num_classes=dm.num_classes,
+            emb_size=dm.emb_size,
+            seq_length=cfg.model.seq_length,
+            dropout=cfg.model.dropout,
+        )
+        base_model.config = {k: v if not isinstance(v, DictConfig) else dict(v) for k, v in dict(cfg.model).items()}
+        model = Classifier(
+            base_model,
+            lr=cfg.trainer.lr,
+            plora_train=False
+        )
+        checkpoint_callback, logger = get_callbacks_and_logger("base")
+        trainer = L.Trainer(
+            max_epochs=cfg.trainer.max_epochs,
+            check_val_every_n_epoch=2,
+            logger=logger,
+            callbacks=[checkpoint_callback],
+            devices=cfg.trainer.devices,
+        )
+        model = torch.compile(model)
+        trainer.fit(model, datamodule=dm)
+        dm.setup("test")
+        base_results = trainer.test(ckpt_path="best", datamodule=dm)
+        wandb.finish()
+        best_base_model = Classifier.load_from_checkpoint(
+            checkpoint_callback.best_model_path,
+            model=base_model,
+            lr=cfg.trainer.lr
+        )
     # Phase 2: P-LoRA fine-tuning
     print("Starting Phase 2: P-LoRA Fine-tuning")
-
-    # Load the best base model
-    best_base_model = Classifier.load_from_checkpoint(
-        checkpoint_callback.best_model_path,
-        model=base_model,
-        lr=cfg.trainer.lr
-    )
 
     # Configure P-LoRA
     plora_config = PLoraConfig(

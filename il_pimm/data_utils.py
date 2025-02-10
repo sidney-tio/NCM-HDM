@@ -13,15 +13,15 @@ from torchvision.datasets import MNIST
 class PhishingDataset(Dataset):
     def __init__(self, data_dir: str, train: bool = True):
         if train:
-            data_path = os.path.join(data_dir, "phishing_train.pkl")
+            data_path = os.path.join(data_dir, "train.json")
         else:
-            data_path = os.path.join(data_dir, "phishing_test.pkl")
+            data_path = os.path.join(data_dir, "test.json")
         content_emd_path = os.path.join(data_dir, "content_emd.pkl")
         memory_emd_path = os.path.join(data_dir, "memory_emd.pkl")
 
         self.data_dir = data_dir
         self.train = train
-        raw_data = pd.read_pickle(data_path)
+        raw_data = pd.read_json(data_path)
         self.data, self.n_users = self._format_data(raw_data)
         self.content_emd = pd.read_pickle(content_emd_path)
         self.memory_emd = pd.read_pickle(memory_emd_path)

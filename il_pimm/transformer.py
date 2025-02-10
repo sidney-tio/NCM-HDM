@@ -13,6 +13,24 @@ from torch import Tensor
 
 from utils import d
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        pe = torch.zeros(max_len, 1, d_model)
+        pe[:, 0, 0::2] = torch.sin(position * div_term)
+        pe[:, 0, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+    def forward(self, x):
+        """
+        Arguments:
+            x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
+        """
+        x = x + self.pe[:x.size(0)]
+        return self.dropout(x)
+
 class Linear(nn.Linear):
     def __init__(self, in_features: int, out_features: int, bias: bool = True,
                  device=None, dtype=None) -> None:
@@ -87,6 +105,55 @@ class SelfAttention(nn.Module):
         return self.output_layer(context)
 
 
+class SimpleAttention(nn.Module):
+    def __init__(self, emb_size: int = 128, key_hidden_size: int = 256, value_hidden_size: int = 256) -> None:
+        super().__init__()
+        self.emb_size = emb_size
+        self.key_hidden_size = key_hidden_size
+        self.value_hidden_size = value_hidden_size
+        self.tokeys = Linear(emb_size, key_hidden_size, bias=False)
+        self.toqueries = Linear(emb_size, key_hidden_size, bias=False)
+        self.tovalues = Linear(emb_size, value_hidden_size, bias=False)
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor = None, p: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        :param x: Vectors that will be used as keys, values, queries.
+                  [batch_size x seq_len x embedding_size]
+        :param mask: Mask that will 'remove' the attention from some
+                  of the key, value vectors. [batch_size x 1 x key_len]
+        :return:
+            - Returns a [batch x seq_len x embedding_size] with the contextualized
+                representations of the queries.
+        """
+        b, t, e = x.size()
+        h = 1
+        assert (
+            e == self.emb_size
+        ), f"Input embedding dim ({e}) should match layer embedding dim ({self.emb_size})"
+        keys = self.tokeys(x,p).view(b, t, h, self.key_hidden_size).transpose(1, 2)
+        queries = self.toqueries(x,p).view(b, t, h, self.key_hidden_size).transpose(1, 2)
+        values = self.tovalues(x,p).view(b, t, h, self.value_hidden_size).transpose(1, 2)
+        # compute scaled dot-product self-attention
+        queries = queries / math.sqrt(self.key_hidden_size)
+        # for each word Wi the score with all other words Wj
+        # for all heads inside the batch
+        # [batch x num_heads x seq_len x seq_len]
+        dot = torch.matmul(queries, keys.transpose(2, 3))
+        # apply the mask (if we have one)
+        # We add a dimension for the heads to it below: [batch, 1, 1, seq_len]
+        if mask is not None:
+            dot = dot.masked_fill(~mask.unsqueeze(1), float("-inf"))
+        # apply attention to convert the dot scores into probabilities.
+        attention = F.softmax(dot, dim=-1)
+        # We multiply the probabilities with the respective values
+        context = torch.matmul(attention, values)
+        # Finally, we reshape back to [batch x seq_len x num_heads * embedding_size]
+        context = context.transpose(1, 2).contiguous().view(b, t, h * self.value_hidden_size)
+        # We unify the heads by appliying a linear transform from:
+        # [batch x seq_len x num_heads * embedding_size] -> [batch x seq_len x embedding_size]
+        return context
+
+
 class TransformerBlock(nn.Module):
     """
     Transformer Encoder Block
@@ -144,6 +211,42 @@ class TransformerBlock(nn.Module):
 
         return x
 
+class ShallowTransformer(nn.Module):
+    "Simple Attention Layer"
+    def __init__(self, emb_size: int = 128,
+                 seq_length: int = 256,
+                 num_classes: int = 2,
+                 dropout=0.1,
+                 key_hidden_size=None,
+                 value_hidden_size=None) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        key_hidden_size = key_hidden_size
+        value_hidden_size = value_hidden_size
+        if(key_hidden_size is None):
+            key_hidden_size = emb_size
+        elif(value_hidden_size is None):
+            value_hidden_size = emb_size
+        # self.pos_embedding = nn.Embedding(embedding_dim=emb_size, num_embeddings=seq_length)
+        self.pos_embedding = PositionalEncoding(emb_size, dropout=dropout, max_len=seq_length)
+        self.attention = SimpleAttention(emb_size=emb_size,
+                                         key_hidden_size=key_hidden_size,
+                                         value_hidden_size=value_hidden_size)
+        self.toprobs = nn.Linear(value_hidden_size, num_classes)
+        self.do = nn.Dropout(dropout)
+    def forward(self, x: torch.Tensor, mask: torch.Tensor, p: torch.Tensor) -> torch.Tensor:
+        tokens = x
+        # b, t, e = tokens.size()
+        # positions = self.pos_embedding(torch.arange(t, device=d()))[None, :, :].expand(b, t, e)
+        positions = self.pos_embedding(tokens.permute(1, 0, 2)).permute(1, 0, 2)
+        x = tokens + positions
+        x = self.do(x)
+        x = self.attention(x, mask,p)
+        x = self.do(x)
+        x = x.mean(dim=1)
+        x = self.toprobs(x)
+        return F.log_softmax(x, dim=1)
+
 
 class CTransformer(nn.Module):
     """
@@ -174,9 +277,7 @@ class CTransformer(nn.Module):
         self.max_pool = max_pool
         # NOTE: no token embedding in this model as we take pre-embedded inputs
         # self.token_embedding = nn.Embedding(embedding_dim=emb_size, num_embeddings=vocab_size)
-        self.pos_embedding = nn.Embedding(
-            embedding_dim=emb_size, num_embeddings=seq_length
-        )
+        self.pos_embedding = PositionalEncoding(emb_size, dropout=dropout, max_len=seq_length)
 
         self.tblocks = nn.ModuleList(
             [
