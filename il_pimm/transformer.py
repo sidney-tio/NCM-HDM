@@ -225,7 +225,7 @@ class ShallowTransformer(nn.Module):
         value_hidden_size = value_hidden_size
         if(key_hidden_size is None):
             key_hidden_size = emb_size
-        elif(value_hidden_size is None):
+        if(value_hidden_size is None):
             value_hidden_size = emb_size
         # self.pos_embedding = nn.Embedding(embedding_dim=emb_size, num_embeddings=seq_length)
         self.pos_embedding = PositionalEncoding(emb_size, dropout=dropout, max_len=seq_length)
