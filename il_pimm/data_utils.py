@@ -30,8 +30,8 @@ class PhishingDataset(Dataset):
         return len(self.data)
 
     def _format_data(self, df):
-        df = df[["mturk_id", "row_idx", "memory_idx", "user_action1"]]
-        user_ids = pd.Categorical(df["mturk_id"])
+        df = df[["Mturk_id", "row_idx", "memory_idx", "user_action1"]]
+        user_ids = pd.Categorical(df["Mturk_id"])
         df["user_id"] = user_ids.codes
         n_users = len(user_ids.categories)
         df = df.rename(columns={"user_action1": "label"})
