@@ -37,7 +37,7 @@ def main(cfg: DictConfig) -> None:
     def get_callbacks_and_logger(phase):
         checkpoint_callback = ModelCheckpoint(
             monitor="val/loss",
-            dirpath=os.path.join(exp_dir, f"checkpoints_{phase}"),
+            dirpath=os.path.join(exp_dir, f"{cfg.dataset}_checkpoints_{phase}"),
             filename=f"epoch_{phase}_{{epoch:02d}}-val_loss_{{val/loss:.2f}}",
             save_top_k=cfg.trainer.save_top_k,
             auto_insert_metric_name=False,
