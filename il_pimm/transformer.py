@@ -229,17 +229,24 @@ class ShallowTransformer(nn.Module):
             value_hidden_size = emb_size
         # self.pos_embedding = nn.Embedding(embedding_dim=emb_size, num_embeddings=seq_length)
         self.pos_embedding = PositionalEncoding(emb_size, dropout=dropout, max_len=seq_length)
+        self.type_embedding = nn.Embedding(2, emb_size)
         self.attention = SimpleAttention(emb_size=emb_size,
                                          key_hidden_size=key_hidden_size,
                                          value_hidden_size=value_hidden_size)
         self.toprobs = nn.Linear(value_hidden_size, num_classes)
         self.do = nn.Dropout(dropout)
+
+        token_type_ids = torch.zeros(seq_length, dtype=torch.long)
+        token_type_ids[1::2] = 1
+        self.register_buffer('token_type_ids', token_type_ids)
     def forward(self, x: torch.Tensor, mask: torch.Tensor, p: torch.Tensor) -> torch.Tensor:
         tokens = x
-        # b, t, e = tokens.size()
+        b, t, e = tokens.size()
         # positions = self.pos_embedding(torch.arange(t, device=d()))[None, :, :].expand(b, t, e)
         positions = self.pos_embedding(tokens.permute(1, 0, 2)).permute(1, 0, 2)
-        x = tokens + positions
+        type_ids = self.token_type_ids[:t].expand(b, -1)
+        type_embeddings = self.type_embedding(type_ids)
+        x = tokens + positions + type_embeddings
         x = self.do(x)
         x = self.attention(x, mask,p)
         x = self.do(x)
