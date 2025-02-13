@@ -254,7 +254,7 @@ class ShallowTransformer(nn.Module):
         x = self.toprobs(x)
         return F.log_softmax(x, dim=1)
 
-class InstanceTransformer:
+class InstanceTransformer(nn.Module):
     "Instance Classifier"
     def __init__(self, emb_size: int = 128,
                  seq_length: int = 256,
