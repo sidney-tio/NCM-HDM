@@ -146,8 +146,10 @@ def main(cfg: DictConfig) -> None:
     plora_results = trainer.test(ckpt_path="best", datamodule=dm)
 
     # Print comparison
-    print("Base Model Results:", base_results)
+    if not cfg.model_checkpoint:
+        print("Base Model Results:", base_results)
     print("P-LoRA Model Results:", plora_results)
+    wandb.finish()
 
 if __name__ == "__main__":
     main()
