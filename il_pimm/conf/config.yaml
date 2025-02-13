@@ -10,6 +10,7 @@ wandb_logger: true
 run_notes: ""
 root_dir: "./results/phishing_encoding"
 model_checkpoint: ""
+input_type: "instance"
 trainer:
   batch_size: 64
   lr: 5e-6

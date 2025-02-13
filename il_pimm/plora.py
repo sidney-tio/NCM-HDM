@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers.pytorch_utils import Conv1D
+from transformer import SimpleAttention
 
 from peft.import_utils import is_bnb_available
 from peft.utils import (
@@ -231,6 +232,31 @@ class PLoraModel(torch.nn.Module):
                 self._replace_module(parent, target_name, new_module, target)
         return self.model
 
+    def get_embeddings(self, user_id, memory,mask):
+        return self.lora_embedding(user_id)
+
+class PMemoryLoraModel(PLoraModel):
+    def __init__(self, model, config, adapter_name):
+        config.user_token_dim = config.user_token_dim*2
+        super.__init__(model,config,adapter_name)
+        emb_size = self.model.emb_size
+        self.memory_embedding = SimpleAttention(
+            emb_size,emb_size,emb_size
+        )
+
+    def get_embeddings(self, user_id, memory, mask):
+       user_emb = super().get_embeddings(user_id, memory,mask)
+
+       # Mask out last instance
+       non_padded_lengths = mask.squeeze(1).sum(dim=1)
+       batch_indices = torch.arange(mask.size(0), device=mask.device)
+       last_indices = non_padded_lengths - 1
+       mask = mask.clone()
+       mask[batch_indices, 0, last_indices] = 0
+
+       memory_embedding = self.memory_embedding(memory, mask, None)
+
+       return torch.cat([user_emb, memory_embedding], dim=1)
 
 @dataclass
 class PLoraConfig(PeftConfig):

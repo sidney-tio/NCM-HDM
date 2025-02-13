@@ -7,10 +7,10 @@ from omegaconf import DictConfig
 from lightning.pytorch import loggers
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch import seed_everything
-from plora import PLoraConfig, PLoraModel
+from plora import PLoraConfig, PLoraModel, PMemoryLoraModel
 
 from data_utils import PhishingDataModule, IDGDataModule
-from transformer import Classifier, ShallowTransformer
+from transformer import Classifier, ShallowTransformer, InstanceTransformer
 
 dataset_info = {
     "phishing": (PhishingDataModule,"./dataset/phishing/phishing-Emd"),
@@ -56,16 +56,27 @@ def main(cfg: DictConfig) -> None:
 
         return checkpoint_callback, logger
 
-    # Phase 1: Base model training
-    if cfg.model_checkpoint:
-        print("Loading pretrained base model from checkpoint")
+    if cfg.input_type == 'seq':
         base_model = ShallowTransformer(
+                num_classes=dm.num_classes,
+                emb_size=dm.emb_size,
+                seq_length=cfg.model.seq_length,
+                dropout=cfg.model.dropout,
+            )
+
+    elif cfg.input_type == "instance":
+        base_model = InstanceTransformer(
             num_classes=dm.num_classes,
             emb_size=dm.emb_size,
             seq_length=cfg.model.seq_length,
             dropout=cfg.model.dropout,
         )
-        base_model.config = {k: v if not isinstance(v, DictConfig) else dict(v) for k, v in dict(cfg.model).items()}
+
+    base_model.config = {k: v if not isinstance(v, DictConfig) else dict(v) for k, v in dict(cfg.model).items()}
+
+    # Phase 1: Base model training
+    if cfg.model_checkpoint:
+        print("Loading pretrained base model from checkpoint")
         best_base_model = Classifier.load_from_checkpoint(
             cfg.model_checkpoint,
             model=base_model,
@@ -74,13 +85,7 @@ def main(cfg: DictConfig) -> None:
         checkpoint_callback = None
     else:
         print("Starting Phase 1: Base Model Training")
-        base_model = ShallowTransformer(
-            num_classes=dm.num_classes,
-            emb_size=dm.emb_size,
-            seq_length=cfg.model.seq_length,
-            dropout=cfg.model.dropout,
-        )
-        base_model.config = {k: v if not isinstance(v, DictConfig) else dict(v) for k, v in dict(cfg.model).items()}
+
         model = Classifier(
             base_model,
             lr=cfg.trainer.lr,
@@ -117,10 +122,18 @@ def main(cfg: DictConfig) -> None:
         user_token_dim=cfg.user_token_dim,
     )
 
-    plora_model = PLoraModel(
-        model=best_base_model.model,  # Use the trained base model
+    if cfg.input_type == 'seq':
+        plora_model = PLoraModel(
+        model=best_base_model.model,
         config={"default": plora_config},
         adapter_name="default"
+    )
+
+    elif cfg.input_type == "instance":
+        plora_model = PMemoryLoraModel(
+            model=best_base_model.model,
+            config={"default": plora_config},
+            adapter_name="default"
     )
 
     # Create new classifier with P-LoRA

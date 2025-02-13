@@ -254,6 +254,42 @@ class ShallowTransformer(nn.Module):
         x = self.toprobs(x)
         return F.log_softmax(x, dim=1)
 
+class InstanceTransformer:
+    "Instance Classifier"
+    def __init__(self, emb_size: int = 128,
+                 seq_length: int = 256,
+                 num_classes: int = 2,
+                 dropout=0.1,
+                 key_hidden_size=None,
+                 value_hidden_size=None) -> None:
+        super().__init__()
+        self.num_classes = num_classes
+        self.emb_size = emb_size
+        key_hidden_size = key_hidden_size
+        value_hidden_size = value_hidden_size
+        if(key_hidden_size is None):
+            key_hidden_size = emb_size
+        if(value_hidden_size is None):
+            value_hidden_size = emb_size
+        self.type_embedding = nn.Embedding(2, emb_size)
+        self.attention = SimpleAttention(emb_size=emb_size,
+                                         key_hidden_size=key_hidden_size,
+                                         value_hidden_size=value_hidden_size)
+        self.toprobs = nn.Linear(value_hidden_size, num_classes)
+        self.do = nn.Dropout(dropout)
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor, p: torch.Tensor) -> torch.Tensor:
+        non_padded_lengths = mask.squeeze(1).sum(dim=1)
+        batch_indices = torch.arange(x.size(0))
+        last_indices = non_padded_lengths - 1
+        instance = x[batch_indices, last_indices].unsqueeze(1)
+        x = self.do(instance)
+        x = self.attention(x,None,p)
+        x = self.do(x)
+        x = x.mean(dim=1)
+        x = self.toprobs(x)
+        return F.log_softmax(x, dim=1)
+
 
 class CTransformer(nn.Module):
     """
@@ -394,7 +430,7 @@ class Classifier(L.LightningModule):
         x, mask, y, user_id = batch
         p = None
         if self.plora_train:
-            p = self.model.lora_embedding(user_id)
+            p = self.model.get_embeddings(user_id,x,mask)
 
         y_hat = self.model(x, mask, p)
         loss = F.nll_loss(y_hat, y)
