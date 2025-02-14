@@ -245,7 +245,7 @@ class PMemoryLoraModel(PLoraModel):
         )
 
     def get_embeddings(self, user_id, memory, mask):
-       user_emb = super().get_embeddings(user_id, memory,mask)
+       user_emb = super().get_embeddings(user_id, memory,mask).unsqueeze(1)
 
        # Mask out last instance
        non_padded_lengths = mask.squeeze(1).sum(dim=1)
