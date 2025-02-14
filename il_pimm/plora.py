@@ -237,9 +237,20 @@ class PLoraModel(torch.nn.Module):
 
 class PMemoryLoraModel(PLoraModel):
     def __init__(self, model, config, adapter_name):
+        super().__init__()
+        self.model = model
+        self.forward = self.model.forward
+        self.peft_config = config
         emb_size = model.emb_size
-        config[adapter_name].user_token_dim = emb_size * 2
-        super().__init__(model,config,adapter_name)
+        self.peft_config[adapter_name].user_token_dim = emb_size*2
+        self.add_adapter(adapter_name, self.peft_config[adapter_name])
+        if self.peft_config[adapter_name].num_virtual_users is not None and self.peft_config[adapter_name].user_token_dim is not None:
+            self.lora_embedding = torch.nn.Embedding(self.peft_config[adapter_name].num_virtual_users,
+                                                     self.peft_config[adapter_name].user_token_dim*0.5,
+                                                     _weight=torch.zeros(self.peft_config[adapter_name].num_virtual_users,
+                                                                         self.peft_config[adapter_name].user_token_dim*0.5))
+        else:
+            self.register_module("lora_embedding", None)
         self.memory_embedding = SimpleAttention(
             emb_size,emb_size,emb_size
         )
