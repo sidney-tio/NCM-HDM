@@ -237,7 +237,7 @@ class PLoraModel(torch.nn.Module):
 
 class PMemoryLoraModel(PLoraModel):
     def __init__(self, model, config, adapter_name):
-        config.user_token_dim = config.user_token_dim*2
+        config[adapter_name].user_token_dim = config[adapter_name].user_token_dim*2
         super.__init__(model,config,adapter_name)
         emb_size = self.model.emb_size
         self.memory_embedding = SimpleAttention(
