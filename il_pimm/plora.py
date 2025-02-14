@@ -237,15 +237,15 @@ class PLoraModel(torch.nn.Module):
 
 class PMemoryLoraModel(PLoraModel):
     def __init__(self, model, config, adapter_name):
-        config[adapter_name].user_token_dim = config[adapter_name].user_token_dim*2
-        super().__init__(model,config,adapter_name)
         emb_size = self.model.emb_size
+        config[adapter_name].user_token_dim = emb_size * 2
+        super().__init__(model,config,adapter_name)
         self.memory_embedding = SimpleAttention(
             emb_size,emb_size,emb_size
         )
 
     def get_embeddings(self, user_id, memory, mask):
-       user_emb = super().get_embeddings(user_id, memory,mask).unsqueeze(1)
+       user_emb = super().get_embeddings(user_id, memory,mask)
 
        # Mask out last instance
        non_padded_lengths = mask.squeeze(1).sum(dim=1)
@@ -255,6 +255,7 @@ class PMemoryLoraModel(PLoraModel):
        mask[batch_indices, 0, last_indices] = 0
 
        memory_embedding = self.memory_embedding(memory, mask, None)
+       memory_embedding = memory_embedding.mean(dim=1)
 
        return torch.cat([user_emb, memory_embedding], dim=1)
 
