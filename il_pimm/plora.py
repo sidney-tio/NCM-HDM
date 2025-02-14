@@ -237,7 +237,7 @@ class PLoraModel(torch.nn.Module):
 
 class PMemoryLoraModel(PLoraModel):
     def __init__(self, model, config, adapter_name):
-        super().__init__()
+        super().__init__(model,config,adapter_name)
         self.model = model
         self.forward = self.model.forward
         self.peft_config = config
