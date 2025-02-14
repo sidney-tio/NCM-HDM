@@ -246,9 +246,9 @@ class PMemoryLoraModel(PLoraModel):
         self.add_adapter(adapter_name, self.peft_config[adapter_name])
         if self.peft_config[adapter_name].num_virtual_users is not None and self.peft_config[adapter_name].user_token_dim is not None:
             self.lora_embedding = torch.nn.Embedding(self.peft_config[adapter_name].num_virtual_users,
-                                                     self.peft_config[adapter_name].user_token_dim*0.5,
+                                                     int(self.peft_config[adapter_name].user_token_dim*0.5),
                                                      _weight=torch.zeros(self.peft_config[adapter_name].num_virtual_users,
-                                                                         self.peft_config[adapter_name].user_token_dim*0.5))
+                                                                         int(self.peft_config[adapter_name].user_token_dim*0.5)))
         else:
             self.register_module("lora_embedding", None)
         self.memory_embedding = SimpleAttention(
