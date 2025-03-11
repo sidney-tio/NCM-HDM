@@ -1,0 +1,6 @@
+# conf/model/transformer.yaml
+n_heads: 4
+n_layers: 4
+seq_length: 256
+max_pool: false
+dropout: 0.1

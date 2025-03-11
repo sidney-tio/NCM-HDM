@@ -242,7 +242,7 @@ class PMemoryLoraModel(PLoraModel):
         self.forward = self.model.forward
         self.peft_config = config
         emb_size = model.emb_size
-        self.peft_config[adapter_name].user_token_dim = emb_size*2
+        self.peft_config[adapter_name].user_token_dim = emb_size
         self.add_adapter(adapter_name, self.peft_config[adapter_name])
         if self.peft_config[adapter_name].num_virtual_users is not None and self.peft_config[adapter_name].user_token_dim is not None:
             self.lora_embedding = torch.nn.Embedding(self.peft_config[adapter_name].num_virtual_users,
@@ -254,21 +254,18 @@ class PMemoryLoraModel(PLoraModel):
         self.memory_embedding = SimpleAttention(
             emb_size,emb_size,emb_size
         )
+        self.toproj = nn.Linear(emb_size*2,emb_size)
+        self.dropout = nn.Dropout(0.1)
 
     def get_embeddings(self, user_id, memory, mask):
        user_emb = super().get_embeddings(user_id, memory,mask)
 
-       # Mask out last instance
-       non_padded_lengths = mask.squeeze(1).sum(dim=1)
-       batch_indices = torch.arange(mask.size(0), device=mask.device)
-       last_indices = non_padded_lengths - 1
-       mask = mask.clone()
-       mask[batch_indices, 0, last_indices] = 0
-
+       memory = self.dropout(memory)
        memory_embedding = self.memory_embedding(memory, mask, None)
+       memory_embedding = self.dropout(memory_embedding)
        memory_embedding = memory_embedding.mean(dim=1)
 
-       return torch.cat([user_emb, memory_embedding], dim=1)
+       return self.toproj(torch.cat([user_emb, memory_embedding], dim=1))
 
 @dataclass
 class PLoraConfig(PeftConfig):
@@ -486,62 +483,38 @@ class Linear(nn.Linear, PLoraLayer):
         return result
 
 
-# if is_bnb_available():
-#
-#     class Linear8bitLt(bnb.nn.Linear8bitLt, PLoraLayer):
-#         # Lora implemented in a dense layer
-#         def __init__(
-#             self,
-#             adapter_name,
-#             in_features,
-#             out_features,
-#             r: int = 0,
-#             lora_alpha: int = 1,
-#             lora_dropout: float = 0.0,
-#             **kwargs,
-#         ):
-#             bnb.nn.Linear8bitLt.__init__(
-#                 self,
-#                 in_features,
-#                 out_features,
-#                 bias=kwargs.get("bias", True),
-#                 has_fp16_weights=kwargs.get("has_fp16_weights", True),
-#                 memory_efficient_backward=kwargs.get("memory_efficient_backward", False),
-#                 threshold=kwargs.get("threshold", 0.0),
-#                 index=kwargs.get("index", None),
-#             )
-#             PLoraLayer.__init__(self, in_features=in_features, out_features=out_features)
-#
-#             # Freezing the pre-trained weight matrix
-#             self.weight.requires_grad = False
-#
-#             init_lora_weights = kwargs.pop("init_lora_weights", True)
-#             self.update_layer(adapter_name, r, lora_alpha, lora_dropout, init_lora_weights)
-#             self.active_adapter = adapter_name
-#
-#         def forward(self, x: torch.Tensor):
-#             result = super().forward(x)
-#
-#             if self.disable_adapters or self.active_adapter not in self.lora_A.keys():
-#                 return result
-#             elif self.r[self.active_adapter] > 0:
-#                 if not torch.is_autocast_enabled():
-#                     expected_dtype = result.dtype
-#
-#                     if x.dtype != torch.float32:
-#                         x = x.float()
-#                     output = (
-#                         self.lora_B[self.active_adapter](
-#                             self.lora_A[self.active_adapter](self.lora_dropout[self.active_adapter](x))
-#                         ).to(expected_dtype)
-#                         * self.scaling[self.active_adapter]
-#                     )
-#                 else:
-#                     output = (
-#                         self.lora_B[self.active_adapter](
-#                             self.lora_A[self.active_adapter](self.lora_dropout[self.active_adapter](x))
-#                         )
-#                         * self.scaling[self.active_adapter]
-#                     )
-#                 result += output
-#             return result
+class PLoRaWrapper(nn.Module):
+    def __init__(self, base_model):
+        super().__init__()
+        self.model = base_model
+        self.current_p = None
+        self.hooks = []
+
+        for module in self.model.modules():
+            if isinstance(module, PLoraLayer):
+                hook = module.register_forward_hook(self._forward_hook)
+                self.hooks.append(hook)
+
+    def _forward_hook(self, module, input_args, output):
+        if isinstance(module, PLoraLayer):
+            return module.forward(input_args[0], p = self.current_p)
+        return output
+
+    def forward(self, input_ids, attention_mask=None, p=None, labels=None, **kwargs):
+        p = self.model.get_embeddings(p,input_ids,attention_mask)
+        self.current_p = p
+
+        # Run the model's forward pass normally
+        outputs = self.model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            **kwargs
+        )
+
+        return outputs
+
+    def __del__(self):
+        for hook in self.hooks:
+            hook.remove()
+
