@@ -13,6 +13,7 @@ from transformers import (
     default_data_collator
 )
 
+from peft import PeftModel, PeftConfig
 from plora import PLoraConfig, PLoraModel, PMemoryLoraModel, PLoRaWrapper
 from plm_dataset import make_supervised_data_module
 
@@ -39,9 +40,12 @@ def main(cfg: DictConfig) -> None:
             notes=cfg.run_notes,
         )
 
-    tokenizer = AutoTokenizer.from_pretrained(cfg.model_name_or_path)
+    tokenizer = AutoTokenizer.from_pretrained(cfg.model_checkpoint)
     print(f"Loading pretrained base model from checkpoint: {cfg.model_checkpoint}")
-    base_model = AutoModelForCausalLM.from_pretrained(cfg.model_checkpoint)
+    peft_config = PeftConfig.from_pretrained(cfg.model_checkpoint)
+    base_model = AutoModelForCausalLM.from_pretrained(peft_config.base_model_name_or_path)
+    base_model = PeftModel.from_pretrained(base_model, cfg.model_checkpoint)
+    base_model = base_model.merge_and_unload()
 
     data_dir = dataset_info[cfg.dataset]
 
