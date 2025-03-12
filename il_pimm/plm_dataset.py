@@ -135,7 +135,7 @@ def get_mturk_mappings(data_path, is_test=False, train_mappings=None):
     all_examples = []
 
     # Determine the file to load based on is_test flag
-    file_path = os.path.join(data_path, "test_feats.jsonl" if is_test else "train")
+    file_path = os.path.join(data_path, "test_feats.jsonl" if is_test else "train_feats.jsonl")
 
     # If using test data with existing train mappings
     if is_test and train_mappings is not None:
