@@ -125,11 +125,38 @@ def preprocess(
         label[:source_len] = IGNORE_INDEX
     return dict(input_ids=input_ids, labels=labels)
 
-def get_mturk_mappings(data_path):
+def get_mturk_mappings(data_path, is_test=False, train_mappings=None):
+    """
+    Get Mturk ID mappings for train or test data.
+    If is_test=True and train_mappings is provided, it will use mappings from train
+    but load examples from test.
+    """
     mturk_ids = []
     all_examples = []
 
-    with jsonlines.open(data_path, 'r') as reader:
+    # Determine the file to load based on is_test flag
+    file_path = os.path.join(data_path, "test_feats.jsonl" if is_test else "train")
+
+    # If using test data with existing train mappings
+    if is_test and train_mappings is not None:
+        id_to_int, n_users = train_mappings
+
+        with jsonlines.open(file_path, 'r') as reader:
+            for item in reader:
+                mturk_id = item.get("Mturk_id") or item.get("MturkID")
+                mturk_ids.append(mturk_id if mturk_id else "unknown")
+                all_examples.append(item)
+
+        # Map test examples using the training mappings
+        mapped_ids = []
+        for item in all_examples:
+            mturk_id = item.get("Mturk_id") or item.get("MturkID")
+            mapped_ids.append(id_to_int.get(mturk_id if mturk_id else "unknown", 0))
+
+        return id_to_int, n_users, mapped_ids
+
+    # For training data or when no mappings are provided
+    with jsonlines.open(file_path, 'r') as reader:
         for item in reader:
             mturk_id = item.get("Mturk_id") or item.get("MturkID")
             mturk_ids.append(mturk_id if mturk_id else "unknown")
@@ -164,8 +191,8 @@ class SupervisedDataset(Dataset):
        test_dataset = cls(data_path, tokenizer, test=True, debug=debug,
                          create_mappings=False,
                          shared_mappings=(train_dataset.id_to_int,
-                                          train_dataset.n_users,
-                                          train_dataset.mapped_ids))
+                                          train_dataset.n_users
+                                        ))
 
        return train_dataset, test_dataset
 
@@ -184,7 +211,7 @@ class SupervisedDataset(Dataset):
        if create_mappings:
            self.id_to_int, self.n_users, self.mapped_ids = get_mturk_mappings(data_path)
        else:
-           self.id_to_int, self.n_users, self.mapped_ids = shared_mappings
+           self.id_to_int, self.n_users, self.mapped_ids = get_mturk_mappings(data_path, is_test=True, train_mappings=shared_mappings)
 
        logging.warning("Formatting inputs...")
 
