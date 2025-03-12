@@ -500,8 +500,8 @@ class PLoRaWrapper(nn.Module):
             return module.forward(input_args[0], p = self.current_p)
         return output
 
-    def forward(self, input_ids, attention_mask=None, p=None, labels=None, **kwargs):
-        p = self.model.get_embeddings(p,input_ids,attention_mask)
+    def forward(self, input_ids, attention_mask=None, user_id=None, labels=None, **kwargs):
+        p = self.model.get_embeddings(user_id,input_ids,attention_mask)
         self.current_p = p
 
         # Run the model's forward pass normally
