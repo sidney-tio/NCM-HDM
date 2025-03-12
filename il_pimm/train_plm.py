@@ -49,7 +49,7 @@ def main(cfg: DictConfig) -> None:
 
     data_dir = dataset_info[cfg.dataset]
 
-    data_module = make_supervised_data_module(tokenizer=tokenizer,data_args=os.path.join(data_dir,"train.json"))
+    data_module = make_supervised_data_module(tokenizer=tokenizer,data_args=os.path.join(data_dir,"train.json"), test=cfg.test)
 
     plora_config = PLoraConfig(
         r=cfg.r,

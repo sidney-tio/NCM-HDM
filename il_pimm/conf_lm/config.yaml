@@ -11,9 +11,10 @@ run_notes: ""
 model_name_or_path: "meta-llama/Llama-2-7b-hf"
 model_checkpoint: "/careAIDrive/"
 input_type: "seq"
+test: true
 trainer:
   batch_size: 64
   lr: 5e-6
   max_epochs: 1
-  save_top_k: 2
+  save_top_k: 1
   devices: "auto"

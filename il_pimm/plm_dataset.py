@@ -56,7 +56,6 @@ PROMPT_DICT = {
 }
 
 def smart_tokenizer_and_embedding_resize(
-    special_tokens_dict: Dict,
     tokenizer: transformers.PreTrainedTokenizer,
     model: transformers.PreTrainedModel,
 ):
@@ -64,6 +63,15 @@ def smart_tokenizer_and_embedding_resize(
 
     Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
     """
+    special_tokens_dict = dict()
+    if tokenizer.pad_token is None:
+        special_tokens_dict["pad_token"] = DEFAULT_PAD_TOKEN
+    if tokenizer.eos_token is None:
+        special_tokens_dict["eos_token"] = DEFAULT_EOS_TOKEN
+    if tokenizer.bos_token is None:
+        special_tokens_dict["bos_token"] = DEFAULT_BOS_TOKEN
+    if tokenizer.unk_token is None:
+        special_tokens_dict["unk_token"] = DEFAULT_UNK_TOKEN
     num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
     model.resize_token_embeddings(len(tokenizer))
 
@@ -144,10 +152,13 @@ def get_mturk_mappings(data_path):
 class SupervisedDataset(Dataset):
    """Dataset for supervised fine-tuning."""
 
-   def __init__(self, data_path: str, tokenizer: transformers.PreTrainedTokenizer):
+   def __init__(self, data_path: str, tokenizer: transformers.PreTrainedTokenizer, test: bool):
        super(SupervisedDataset, self).__init__()
        logging.warning("Loading data...")
        list_data_dict = jload(data_path)
+
+       if test:
+           list_data_dict = list_data_dict[:100]
 
        # Create Mturk ID mappings
        self.id_to_int, self.n_users, self.mapped_ids = get_mturk_mappings(data_path)
@@ -200,9 +211,9 @@ class DataCollatorForSupervisedDataset(object):
         )
 
 
-def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer, data_args) -> Dict:
+def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer, data_args, test) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
-    train_dataset = SupervisedDataset(tokenizer=tokenizer, data_path=data_args.data_path)
+    train_dataset = SupervisedDataset(tokenizer=tokenizer, data_path=data_args, test=test)
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     n_users = train_dataset.n_users
     return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator, n_users=n_users)
