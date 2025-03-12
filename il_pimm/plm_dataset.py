@@ -1,6 +1,7 @@
 import copy
 import json
 import jsonlines
+import os
 import io
 import logging
 from dataclasses import dataclass
@@ -152,16 +153,38 @@ def get_mturk_mappings(data_path):
 class SupervisedDataset(Dataset):
    """Dataset for supervised fine-tuning."""
 
-   def __init__(self, data_path: str, tokenizer: transformers.PreTrainedTokenizer, test: bool):
+   @classmethod
+   def create_train_test_datasets(cls, data_path: str, tokenizer: transformers.PreTrainedTokenizer,
+                                  debug: bool = False):
+       """Create both training and test datasets with shared mappings."""
+       # First create the training dataset to establish mappings
+       train_dataset = cls(data_path, tokenizer, test=False, debug=debug, create_mappings=True)
+
+       # Create test dataset with same mappings
+       test_dataset = cls(data_path, tokenizer, test=True, debug=debug,
+                         create_mappings=False,
+                         shared_mappings=(train_dataset.id_to_int,
+                                          train_dataset.n_users,
+                                          train_dataset.mapped_ids))
+
+       return train_dataset, test_dataset
+
+   def __init__(self, data_path: str, tokenizer: transformers.PreTrainedTokenizer,
+                test: bool, debug: bool = False, create_mappings: bool = True,
+                shared_mappings = None):
        super(SupervisedDataset, self).__init__()
        logging.warning("Loading data...")
-       list_data_dict = jload(data_path)
+       mode = "test.json" if test else "train.json"
+       list_data_dict = jload(os.path.join(data_path, mode))
 
-       if test:
+       if debug:
            list_data_dict = list_data_dict[:100]
 
-       # Create Mturk ID mappings
-       self.id_to_int, self.n_users, self.mapped_ids = get_mturk_mappings(data_path)
+       # Either create new mappings or use shared ones
+       if create_mappings:
+           self.id_to_int, self.n_users, self.mapped_ids = get_mturk_mappings(data_path)
+       else:
+           self.id_to_int, self.n_users, self.mapped_ids = shared_mappings
 
        logging.warning("Formatting inputs...")
 
@@ -173,7 +196,7 @@ class SupervisedDataset(Dataset):
 
        targets = [f"{example['output']}{tokenizer.eos_token}" for example in list_data_dict]
 
-       # Extract user IDs
+       # Extract user IDs for this specific dataset
        self.user_ids = [self.id_to_int.get(example.get("Mturk_id", ""), 0) for example in list_data_dict]
 
        logging.warning("Tokenizing inputs... This may take some time...")
@@ -186,7 +209,7 @@ class SupervisedDataset(Dataset):
        return len(self.input_ids)
 
    def __getitem__(self, i) -> Dict[str, torch.Tensor]:
-       return dict(input_ids=self.input_ids[i], labels=self.labels[i], user_id=self.mapped_ids[i])
+       return dict(input_ids=self.input_ids[i], labels=self.labels[i], user_id=self.user_ids[i])
 
 
 @dataclass
@@ -211,9 +234,18 @@ class DataCollatorForSupervisedDataset(object):
         )
 
 
-def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer, data_args, test) -> Dict:
+def make_supervised_data_module(tokenizer: transformers.PreTrainedTokenizer, data_args, debug=False) -> Dict:
     """Make dataset and collator for supervised fine-tuning."""
-    train_dataset = SupervisedDataset(tokenizer=tokenizer, data_path=data_args, test=test)
+    # Create both train and eval datasets with shared mappings
+    train_dataset, eval_dataset = SupervisedDataset.create_train_test_datasets(
+        tokenizer=tokenizer, data_path=data_args, debug=debug
+    )
+
     data_collator = DataCollatorForSupervisedDataset(tokenizer=tokenizer)
     n_users = train_dataset.n_users
-    return dict(train_dataset=train_dataset, eval_dataset=None, data_collator=data_collator, n_users=n_users)
+
+    return dict(
+        train_dataset=train_dataset,
+        eval_dataset=eval_dataset,  # Now using test dataset as eval dataset
+        data_collator=data_collator
+    ), n_users

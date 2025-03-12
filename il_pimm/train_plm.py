@@ -49,7 +49,7 @@ def main(cfg: DictConfig) -> None:
 
     data_dir = dataset_info[cfg.dataset]
 
-    data_module = make_supervised_data_module(tokenizer=tokenizer,data_args=os.path.join(data_dir,"train.json"), test=cfg.test)
+    data_module, n_users = make_supervised_data_module(tokenizer=tokenizer,data_args=data_dir, debug=cfg.debug)
 
     plora_config = PLoraConfig(
         r=cfg.r,
@@ -57,7 +57,7 @@ def main(cfg: DictConfig) -> None:
         lora_dropout=cfg.lora_dropout,
         target_modules=cfg.target_modules,
         bias=cfg.bias,
-        num_virtual_users=data_module['n_users'],
+        num_virtual_users=n_users,
         user_token_dim=cfg.user_token_dim,
     )
 
@@ -84,9 +84,7 @@ def main(cfg: DictConfig) -> None:
         weight_decay=0.01,
         logging_dir=os.path.join(exp_dir, "logs"),
         logging_steps=100,
-        eval_steps=200,
         save_steps=200,
-        evaluation_strategy="steps",
         save_strategy="steps",
         save_total_limit=cfg.trainer.save_top_k,
         load_best_model_at_end=True,
@@ -108,7 +106,8 @@ def main(cfg: DictConfig) -> None:
     trainer = Trainer(
         model=plora_model,
         args=training_args,
-        train_dataset=data_module,
+        train_dataset=data_module.train_dataset,
+        eval_dataset=data_module.eval_dataset,
         data_collator=default_data_collator,
         callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
     )
@@ -120,8 +119,7 @@ def main(cfg: DictConfig) -> None:
     # Evaluate on test set
     if cfg.test:
         print("Evaluating on test set")
-        test_dataset = make_supervised_data_module(tokenizer=tokenizer,data_args=os.path.join(data_dir,"test.json"))
-        test_results = trainer.evaluate(test_dataset)
+        test_results = trainer.evaluate()
         print("P-LoRA Model Test Results:", test_results)
 
     # Save the final model
