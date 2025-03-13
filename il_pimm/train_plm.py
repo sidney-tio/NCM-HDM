@@ -15,7 +15,7 @@ from transformers import (
 
 from peft import PeftModel, PeftConfig
 from plora import PLoraConfig, PLoraModel, PMemoryLoraModel, PLoRaWrapper
-from plm_dataset import make_supervised_data_module
+from plm_dataset import make_supervised_data_module, smart_tokenizer_and_embedding_resize
 
 dataset_info = {
     "phishing": "./dataset/phishing/phishing-Text/",
@@ -49,6 +49,10 @@ def main(cfg: DictConfig) -> None:
     print(f"Loading pretrained base model from checkpoint: {cfg.model_checkpoint}")
     peft_config = PeftConfig.from_pretrained(cfg.model_checkpoint)
     base_model = AutoModelForCausalLM.from_pretrained(peft_config.base_model_name_or_path, **model_load_params)
+    smart_tokenizer_and_embedding_resize(
+                                        tokenizer=tokenizer,
+                                        model=base_model,
+                                        )
     base_model = PeftModel.from_pretrained(base_model, cfg.model_checkpoint)
     base_model = base_model.merge_and_unload()
 
