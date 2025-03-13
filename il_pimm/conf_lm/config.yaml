@@ -9,7 +9,7 @@ seed: 42
 wandb_logger: true
 run_notes: ""
 model_name_or_path: "meta-llama/Llama-2-7b-hf"
-model_checkpoint: "/careAIDrive/"
+model_checkpoint: "/careAIDrive/common/to_sidney/phishing-text/5010"
 input_type: "seq"
 debug: true
 test: true

@@ -1,3 +1,2 @@
 # conf/data.yaml
-dataset: "idg"
-data_dir: "./dataset/phishing/phishing-Emd"
+dataset: "phishing"
