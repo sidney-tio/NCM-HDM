@@ -19,3 +19,4 @@ trainer:
   max_epochs: 1
   save_top_k: 1
   devices: "auto"
+  fp16: true
