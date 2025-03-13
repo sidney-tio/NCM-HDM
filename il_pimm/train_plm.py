@@ -42,7 +42,7 @@ def main(cfg: DictConfig) -> None:
 
     model_load_params = {
         "device_map": cfg.trainer.devices,
-        "torch_dtype": torch.float16 if cfg.fp16 else torch.float32
+        "torch_dtype": torch.float16 if cfg.trainer.fp16 else torch.float32
     }
 
     tokenizer = AutoTokenizer.from_pretrained(cfg.model_checkpoint)
