@@ -33,7 +33,7 @@ def main(cfg: DictConfig) -> None:
     # Initialize wandb if enabled
     if cfg.wandb_logger:
         wandb.init(
-            name=f"{os.path.basename(exp_dir)}_llama",
+            name=f"{os.path.basename(exp_dir)}_llama_{cfg.dataset}",
             project="phishing",
             dir=exp_dir,
             config=dict(cfg),
