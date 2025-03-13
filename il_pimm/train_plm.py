@@ -100,11 +100,11 @@ def main(cfg: DictConfig) -> None:
     )
 
     # If multiple devices/processes are requested
-    if cfg.trainer.devices > 1:
+    if torch.cuda.device_count() > 1:
         training_args.distributed_training = True
         training_args.ddp_backend = "nccl"  # For GPU
         training_args.num_nodes = 1
-        training_args.world_size = cfg.trainer.devices
+        training_args.world_size = torch.cuda.device_count()
         training_args.deepspeed = None  # Could configure deepspeed here if needed
 
     # Set up the trainer
