@@ -103,7 +103,7 @@ def main(cfg: DictConfig) -> None:
     if torch.cuda.device_count() > 1:
         training_args.distributed_training = True
         training_args.ddp_backend = "nccl"  # For GPU
-        training_args.deepspeed = None  # Could configure deepspeed here if needed
+        training_args.deepspeed = "deepspeed.json"
 
     # Set up the trainer
     trainer = Trainer(
@@ -118,7 +118,7 @@ def main(cfg: DictConfig) -> None:
     print("Starting P-LoRA Fine-tuning")
     trainer.train()
 
-    # Evaluate on test set
+    #    Evaluate on test set
     if cfg.test:
         print("Evaluating on test set")
         test_results = trainer.evaluate()
