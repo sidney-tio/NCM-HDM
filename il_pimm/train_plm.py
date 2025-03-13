@@ -86,10 +86,6 @@ def main(cfg: DictConfig) -> None:
         logging_steps=100,
         save_steps=200,
         save_strategy="steps",
-        save_total_limit=cfg.trainer.save_top_k,
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
-        greater_is_better=False,
         report_to="wandb" if cfg.wandb_logger else "none",
         ddp_find_unused_parameters=False,
     )
