@@ -47,8 +47,8 @@ def main(cfg: DictConfig) -> None:
 
     tokenizer = AutoTokenizer.from_pretrained(cfg.model_checkpoint)
     print(f"Loading pretrained base model from checkpoint: {cfg.model_checkpoint}")
-    peft_config = PeftConfig.from_pretrained(cfg.model_checkpoint, **model_load_params)
-    base_model = AutoModelForCausalLM.from_pretrained(peft_config.base_model_name_or_path)
+    peft_config = PeftConfig.from_pretrained(cfg.model_checkpoint)
+    base_model = AutoModelForCausalLM.from_pretrained(peft_config.base_model_name_or_path, **model_load_params)
     base_model = PeftModel.from_pretrained(base_model, cfg.model_checkpoint)
     base_model = base_model.merge_and_unload()
 
