@@ -103,18 +103,15 @@ def main(cfg: DictConfig) -> None:
     if torch.cuda.device_count() > 1:
         training_args.distributed_training = True
         training_args.ddp_backend = "nccl"  # For GPU
-        training_args.num_nodes = 1
-        training_args.world_size = torch.cuda.device_count()
         training_args.deepspeed = None  # Could configure deepspeed here if needed
 
     # Set up the trainer
     trainer = Trainer(
         model=plora_model,
         args=training_args,
-        train_dataset=data_module.train_dataset,
-        eval_dataset=data_module.eval_dataset,
-        data_collator=default_data_collator,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)],
+        train_dataset=data_module["train_dataset"],
+        eval_dataset=data_module["eval_dataset"],
+        data_collator=data_module["data_collator"]
     )
 
     # Train the model
