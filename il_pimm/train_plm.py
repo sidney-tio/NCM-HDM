@@ -84,6 +84,9 @@ def main(cfg: DictConfig) -> None:
         )
 
     plora_model = PLoRaWrapper(plora_model)
+    del base_model
+    torch.cuda.empty_cache()
+
     training_args = TrainingArguments(
         output_dir=os.path.join(exp_dir, f"{cfg.dataset}_plora_checkpoints"),
         num_train_epochs=cfg.trainer.max_epochs,
