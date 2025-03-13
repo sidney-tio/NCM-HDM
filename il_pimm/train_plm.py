@@ -55,6 +55,9 @@ def main(cfg: DictConfig) -> None:
                                         )
     base_model = PeftModel.from_pretrained(base_model, cfg.model_checkpoint)
     base_model = base_model.merge_and_unload()
+    base_model.config.use_cache = False         # required for gradient checkpointing
+    base_model.enable_input_require_grads()     # required for gradient checkpointing
+    base_model.gradient_checkpointing_enable()
 
     data_dir = dataset_info[cfg.dataset]
 
